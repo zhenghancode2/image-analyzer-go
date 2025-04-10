@@ -1,0 +1,25 @@
+# 日志配置
+log:
+  dir: "logs"
+  file: "image-analyzer.log"
+  level: "info" # debug, info, warn, error
+  format: "json" # json, console
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 8080
+  read_timeout: 30 # 秒
+  write_timeout: 30 # 秒
+  max_request_size: 10485760 # 10MB
+
+# 分析配置
+analyze:
+  temp_dir: "temp"
+  max_file_size: 10485760 # 10MB
+  max_files: 100
+  timeout: 30
+  check_os_info: true
+  check_python_packages: true
+  check_common_tools: true
+  specific_commands: []
