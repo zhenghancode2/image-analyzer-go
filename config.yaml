@@ -15,7 +15,7 @@ server:
 
 # 分析配置
 analyze:
-  temp_dir: "temp"
+  tmp_dir: "tmp"
   max_file_size: 10485760 # 10MB
   max_files: 100
   timeout: 30

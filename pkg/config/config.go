@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
 )
 
@@ -26,7 +27,7 @@ type ServerConfig struct {
 
 // AnalyzeConfig 分析配置
 type AnalyzeConfig struct {
-	TempDir             string   `json:"temp_dir"`
+	TmpDir              string   `json:"tmp_dir"`
 	CheckOSInfo         bool     `json:"check_os_info"`
 	CheckPythonPackages bool     `json:"check_python_packages"`
 	CheckCommonTools    bool     `json:"check_common_tools"`
@@ -38,6 +39,7 @@ type Config struct {
 	Log     LogConfig     `json:"log"`
 	Server  ServerConfig  `json:"server"`
 	Analyze AnalyzeConfig `json:"analyze"`
+	GinMode string        `yaml:"gin_mode" json:"gin_mode" toml:"gin_mode"`
 }
 
 // DefaultConfig 返回默认配置
@@ -57,12 +59,13 @@ func DefaultConfig() *Config {
 			MaxRequestSize: 10 * 1024 * 1024, // 10MB
 		},
 		Analyze: AnalyzeConfig{
-			TempDir:             "temp",
+			TmpDir:              "tmp",
 			CheckOSInfo:         true,
 			CheckPythonPackages: true,
 			CheckCommonTools:    true,
 			SpecificCommands:    []string{},
 		},
+		GinMode: gin.DebugMode,
 	}
 }
 
@@ -83,6 +86,11 @@ func LoadConfig(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// GetLogDir 获取日志目录
+func (c *Config) GetLogDir() string {
+	return c.Log.Dir
+}
+
 // GetLogPath 获取完整的日志文件路径
 func (c *Config) GetLogPath() string {
 	return filepath.Join(c.Log.Dir, c.Log.File)
@@ -90,12 +98,12 @@ func (c *Config) GetLogPath() string {
 
 // GetTempDir 获取临时目录路径
 func (c *Config) GetTempDir() string {
-	return c.Analyze.TempDir
+	return c.Analyze.TmpDir
 }
 
 // EnsureDirs 确保所需的目录存在
 func (c *Config) EnsureDirs() error {
-	dirs := []string{c.Log.Dir, c.Analyze.TempDir}
+	dirs := []string{c.Log.Dir, c.Analyze.TmpDir}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err

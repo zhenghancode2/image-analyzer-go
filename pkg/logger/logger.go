@@ -42,6 +42,9 @@ func Init(cfg *config.Config) error {
 	}
 
 	// 创建日志文件
+	if err := os.MkdirAll(cfg.GetLogDir(), os.ModePerm); err != nil {
+		return err
+	}
 	file, err := os.OpenFile(cfg.GetLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err

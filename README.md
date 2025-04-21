@@ -50,3 +50,38 @@ go build -o bin/image-analyzer .
 
 - `POST /api/v1/analyze` - 分析镜像
 - `GET /api/v1/health` - 健康检查
+
+## Makefile 使用说明
+
+- 构建项目：
+
+  ```bash
+  make build
+  ```
+
+- 启动 server（默认模式）：
+
+  ```bash
+  make run
+  # 或
+  make run MODE=server
+  ```
+
+- 分析指定镜像：
+
+  ```bash
+  make run MODE=analyze IMAGE=镜像名
+  # 例如
+  make run MODE=analyze IMAGE=nginx:latest
+  ```
+
+- 清理构建产物：
+
+  ```sh
+  make clean
+  ```
+
+- 构建 Docker 镜像：
+  ```bash
+  make docker
+  ```

@@ -8,11 +8,13 @@ import (
 	"image-analyzer-go/cmd"
 	"image-analyzer-go/pkg/config"
 	"image-analyzer-go/pkg/logger"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	// 解析命令行参数
-	configPath := flag.String("config", "config.yaml", "配置文件路径")
+	configPath := flag.String("f", "config.yaml", "配置文件路径")
 	flag.Parse()
 
 	// 加载配置
@@ -29,7 +31,8 @@ func main() {
 
 	// 初始化日志系统
 	if err := logger.Init(cfg); err != nil {
-		logger.Fatal("初始化日志失败", logger.WithError(err))
+		fmt.Println("初始化日志系统失败", err)
+		os.Exit(1)
 	}
 	defer logger.Logger.Sync()
 
@@ -37,6 +40,11 @@ func main() {
 	if err := cfg.EnsureDirs(); err != nil {
 		logger.Fatal("目录不存在", logger.WithError(err))
 	}
+
+	// 设置 gin 运行模式（从配置读取）
+	gin.SetMode(cfg.GinMode)
+	r := gin.New()
+	r.Use(gin.Logger(), gin.Recovery())
 
 	// 执行命令
 	if err := cmd.Execute(); err != nil {
