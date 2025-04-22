@@ -1,0 +1,57 @@
+name: SLSA Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Build binary
+        run: |
+          go build -o image-analyzer-go ./...
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-analyzer-go
+          path: image-analyzer-go
+
+  provenance:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-analyzer-go
+
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator@v1.10.0
+        with:
+          base64-subjects: image-analyzer-go
+
+      - name: Upload provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: provenance
+          path: provenance.jsonl
