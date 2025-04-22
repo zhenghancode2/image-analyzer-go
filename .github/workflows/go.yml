@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         env:
-            GO_VERSION: "1.24" # Explicitly set GO_VERSION
+          GO_VERSION: "1.24" # Explicitly set GO_VERSION
         with:
           go-version: ${{ env.GO_VERSION }}
 
@@ -40,11 +40,3 @@ jobs:
         with:
           name: image-analyzer-go
           path: image-analyzer-go
-
-  provenance:
-    needs: build
-    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_go_slsa3.yml@v2.1.0
-    permissions:
-      id-token: write
-      contents: write
-      actions: read
