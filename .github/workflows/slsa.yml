@@ -22,8 +22,10 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v5
+        env:
+            GO_VERSION: "1.24" # Explicitly set GO_VERSION
         with:
-          go-version: "1.24"
+          go-version: ${{ env.GO_VERSION }}
 
       - name: Install dependencies
         run: |
