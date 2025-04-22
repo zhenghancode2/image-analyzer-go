@@ -25,7 +25,7 @@ jobs:
 
       - name: Build binary
         run: |
-          go build -o image-analyzer-go ./...
+          go build -o image-analyzer-go main.go
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
