@@ -129,3 +129,8 @@ func WithInt(key string, value int) zapcore.Field {
 func WithBool(key string, value bool) zapcore.Field {
 	return zap.Bool(key, value)
 }
+
+// WithAny 创建一个任意字段
+func WithAny(key string, value interface{}) zapcore.Field {
+	return zap.Any(key, value)
+}

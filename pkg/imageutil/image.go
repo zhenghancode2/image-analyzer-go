@@ -9,9 +9,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"image-analyzer-go/pkg/logger"
 	"image-analyzer-go/pkg/utils"
 
+	"github.com/containers/image/v5/copy"
 	"github.com/containers/image/v5/docker"
+	"github.com/containers/image/v5/oci/layout"
 	"github.com/containers/image/v5/signature"
 	"github.com/containers/image/v5/types"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -21,9 +24,6 @@ import (
 // 返回提取的目录路径和镜像配置，如果发生错误则返回错误
 func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, error) {
 	sys := &types.SystemContext{
-		ArchitectureChoice: "amd64",
-		OSChoice:           "linux",
-		VariantChoice:      "",
 		// 添加 Docker Hub 认证
 		DockerAuthConfig: &types.DockerAuthConfig{
 			Username: os.Getenv("DOCKER_USERNAME"),
@@ -54,6 +54,12 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 		return "", nil, utils.WrapError(err, "解析源镜像引用失败")
 	}
 
+	// 创建目标 OCI 布局引用
+	destRef, err := layout.NewReference(tmpDir, "latest")
+	if err != nil {
+		return "", nil, utils.WrapError(err, "创建目标 OCI 布局引用失败")
+	}
+
 	// 创建策略上下文
 	policy := &signature.Policy{
 		Default: []signature.PolicyRequirement{
@@ -66,22 +72,44 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 	}
 	defer policyContext.Destroy()
 
-	// 获取镜像实例
-	img, err := srcRef.NewImage(ctx, sys)
+	// 创建进度处理器
+	progress := NewProgressHandler()
+
+	// 复制镜像到本地 OCI 布局
+	logger.Info("开始下载镜像...")
+	_, err = copy.Image(ctx, policyContext, destRef, srcRef, &copy.Options{
+		SourceCtx:          sys,
+		DestinationCtx:     sys,
+		ImageListSelection: copy.CopyAllImages,
+		Progress:           progress,
+	})
 	if err != nil {
-		return "", nil, utils.WrapError(err, "打开镜像失败")
+		return "", nil, utils.WrapError(err, "复制镜像到本地 OCI 布局失败")
 	}
-	defer img.Close()
+	logger.Info("镜像下载完成")
+
+	// 打开目标镜像
+	destImg, err := destRef.NewImage(ctx, sys)
+	if err != nil {
+		return "", nil, utils.WrapError(err, "打开目标镜像失败")
+	}
+	defer destImg.Close()
 
 	// 获取镜像配置
-	cfg, err := img.OCIConfig(ctx)
+	cfg, err := destImg.OCIConfig(ctx)
 	if err != nil {
 		return "", nil, utils.WrapError(err, "获取OCI配置失败")
 	}
 
 	// 获取镜像层
-	layers := img.LayerInfos()
+	layers := destImg.LayerInfos()
+	logger.Info("开始提取镜像层", logger.WithInt("total_layers", len(layers)))
 	for i, layer := range layers {
+		logger.Info("开始提取层",
+			logger.WithInt("current", i+1),
+			logger.WithInt("total", len(layers)),
+			logger.WithString("size", utils.FormatBytes(layer.Size)))
+
 		// 创建层目录
 		layerDir := filepath.Join(tmpDir, fmt.Sprintf("layer-%d", i))
 		if err := os.MkdirAll(layerDir, 0755); err != nil {
@@ -89,13 +117,14 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 		}
 
 		// 获取层内容
-		src, err := srcRef.NewImageSource(ctx, sys)
+		blob, err := destRef.NewImageSource(ctx, sys)
 		if err != nil {
 			return "", nil, utils.WrapError(err, fmt.Sprintf("创建层 %d 源失败", i))
 		}
-		defer src.Close()
+		defer blob.Close()
 
-		reader, _, err := src.GetBlob(ctx, layer, nil)
+		// 读取层数据
+		reader, _, err := blob.GetBlob(ctx, layer, nil)
 		if err != nil {
 			return "", nil, utils.WrapError(err, fmt.Sprintf("获取层 %d 数据失败", i))
 		}
@@ -105,7 +134,11 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 		if err := decompressAndUntar(reader, layerDir); err != nil {
 			return "", nil, utils.WrapError(err, fmt.Sprintf("解压层 %d 失败", i))
 		}
+		logger.Info("层提取完成",
+			logger.WithInt("current", i+1),
+			logger.WithInt("total", len(layers)))
 	}
+	logger.Info("所有镜像层提取完成")
 
 	return tmpDir, cfg, nil
 }
