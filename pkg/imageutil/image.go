@@ -21,7 +21,7 @@ import (
 // 返回提取的目录路径和镜像配置，如果发生错误则返回错误
 func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, error) {
 	sys := &types.SystemContext{
-		ArchitectureChoice: "arm64",
+		ArchitectureChoice: "amd64",
 		OSChoice:           "linux",
 		VariantChoice:      "",
 		// 添加 Docker Hub 认证
@@ -29,6 +29,8 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 			Username: os.Getenv("DOCKER_USERNAME"),
 			Password: os.Getenv("DOCKER_PASSWORD"),
 		},
+		// 跳过 TLS 验证
+		DockerInsecureSkipTLSVerify: types.OptionalBoolTrue,
 	}
 
 	// 创建临时目录用于存储镜像
