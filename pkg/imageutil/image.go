@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"image-analyzer-go/pkg/logger"
 	"image-analyzer-go/pkg/utils"
@@ -81,7 +82,10 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 		SourceCtx:          sys,
 		DestinationCtx:     sys,
 		ImageListSelection: copy.CopyAllImages,
-		Progress:           progress,
+		// ProgressInterval 定义了进度更新的时间间隔
+		// 设置为1秒可以在不产生过多日志的情况下提供合理的进度反馈
+		ProgressInterval: time.Second,
+		Progress:         progress,
 	})
 	if err != nil {
 		return "", nil, utils.WrapError(err, "复制镜像到本地 OCI 布局失败")
