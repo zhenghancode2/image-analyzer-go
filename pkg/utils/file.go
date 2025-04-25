@@ -99,3 +99,23 @@ func CreatePath(path string) error {
 	logger.Info("创建路径成功", logger.WithString("path", path))
 	return nil
 }
+
+// EnsureAbsPath 确保路径是绝对路径，如果是相对路径则转换为绝对路径
+func EnsureAbsPath(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	// 获取当前工作目录
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("获取当前工作目录失败: %w", err)
+	}
+
+	absPath := filepath.Join(currentDir, path)
+	logger.Info("将相对路径转换为绝对路径",
+		logger.WithString("relative_path", path),
+		logger.WithString("absolute_path", absPath))
+
+	return absPath, nil
+}

@@ -50,7 +50,7 @@ func init() {
 func runAnalysis() error {
 	ctx := context.Background()
 
-	layersDir, imgCfg, err := imageutil.PullAndExtract(ctx, imageRef, unpackDir)
+	imageDir, imgCfg, err := imageutil.PullAndExtract(ctx, imageRef, unpackDir)
 	if err != nil {
 		return utils.WrapError(err, "提取镜像失败")
 	}
@@ -62,7 +62,7 @@ func runAnalysis() error {
 		if cleanupErr := utils.CleanupTempDir(dir); cleanupErr != nil {
 			logger.Warn("清理临时目录失败", logger.WithString("dir", dir), logger.WithError(cleanupErr))
 		}
-	}(layersDir)
+	}(imageDir)
 
 	summary := analyze.Summary{
 		Architecture: imgCfg.Architecture,
@@ -71,13 +71,13 @@ func runAnalysis() error {
 	}
 
 	if checkOSInfo {
-		summary.OSInfo = analyze.CheckOSInfo(layersDir)
+		summary.OSInfo = analyze.CheckOSInfo(imageDir)
 	}
 	if checkPythonPackages {
-		summary.PythonPackages = analyze.ListPythonPackages(layersDir)
+		summary.PythonPackages = analyze.ListPythonPackages(imageDir)
 	}
 	if checkCommonTools {
-		summary.Tools = analyze.CheckCommonTools(layersDir)
+		summary.Tools = analyze.CheckCommonTools(imageDir)
 	}
 
 	var output []byte

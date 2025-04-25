@@ -24,6 +24,13 @@ import (
 // PullAndExtract 从指定的镜像引用中提取镜像层
 // 返回提取的目录路径和镜像配置，如果发生错误则返回错误
 func PullAndExtract(ctx context.Context, refStr, unpackDir string) (string, *v1.Image, error) {
+	// 确保 unpackDir 是绝对路径
+	var err error
+	unpackDir, err = utils.EnsureAbsPath(unpackDir)
+	if err != nil {
+		return "", nil, utils.WrapError(err, "转换为绝对路径失败")
+	}
+
 	sys := &types.SystemContext{
 		// 添加 Docker Hub 认证
 		DockerAuthConfig: &types.DockerAuthConfig{

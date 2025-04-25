@@ -15,7 +15,7 @@ server:
 
 # 分析配置
 analyze:
-  tmp_dir: "tmp"
+  unpack_dir: "images"
   max_file_size: 10485760 # 10MB
   max_files: 100
   timeout: 30
