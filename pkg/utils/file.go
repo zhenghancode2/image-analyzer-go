@@ -90,3 +90,12 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 	logger.Info("写入文件成功", logger.WithString("path", path))
 	return nil
 }
+
+// 指定路径创建路径
+func CreatePath(path string) error {
+	if err := EnsureDirExists(path); err != nil {
+		return fmt.Errorf("创建路径失败: %w", err)
+	}
+	logger.Info("创建路径成功", logger.WithString("path", path))
+	return nil
+}

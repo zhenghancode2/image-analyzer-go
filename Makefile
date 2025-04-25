@@ -8,6 +8,7 @@ DOCKERFILE := Dockerfile
 all: build
 
 build:
+	go mod tidy
 	go build -o $(BUILD_DIR)/$(APP_NAME) main.go
 
 run: build

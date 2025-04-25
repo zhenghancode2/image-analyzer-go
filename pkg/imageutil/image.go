@@ -23,7 +23,7 @@ import (
 
 // PullAndExtract 从指定的镜像引用中提取镜像层
 // 返回提取的目录路径和镜像配置，如果发生错误则返回错误
-func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, error) {
+func PullAndExtract(ctx context.Context, refStr, unpackDir string) (string, *v1.Image, error) {
 	sys := &types.SystemContext{
 		// 添加 Docker Hub 认证
 		DockerAuthConfig: &types.DockerAuthConfig{
@@ -42,10 +42,8 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 
 	// 最后清理临时目录
 	defer func() {
-		if err != nil {
-			if cleanupErr := utils.CleanupTempDir(tmpDir); cleanupErr != nil {
-				fmt.Printf("警告: 清理临时目录 %s 失败: %v\n", tmpDir, cleanupErr)
-			}
+		if cleanupErr := utils.CleanupTempDir(tmpDir); cleanupErr != nil {
+			fmt.Printf("警告: 清理临时目录 %s 失败: %v\n", tmpDir, cleanupErr)
 		}
 	}()
 
@@ -100,9 +98,17 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 	defer destImg.Close()
 
 	// 获取镜像配置
-	cfg, err := destImg.OCIConfig(ctx)
+	ociCfg, err := destImg.OCIConfig(ctx)
 	if err != nil {
 		return "", nil, utils.WrapError(err, "获取OCI配置失败")
+	}
+
+	// 从引用中提取镜像名称
+	imageName := filepath.Base(refStr)
+	// 创建统一的文件系统目录，使用unpack目录，并将镜像名作为子目录
+	fsDir := filepath.Join(unpackDir, imageName)
+	if err := os.MkdirAll(fsDir, 0755); err != nil {
+		return "", nil, utils.WrapError(err, "创建文件系统目录失败")
 	}
 
 	// 获取镜像层
@@ -113,13 +119,6 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 			logger.WithInt("current", i+1),
 			logger.WithInt("total", len(layers)),
 			logger.WithString("size", utils.FormatBytes(layer.Size)))
-
-		// 创建层目录
-		layerDir := filepath.Join(tmpDir, fmt.Sprintf("layer-%d", i))
-		if err := os.MkdirAll(layerDir, 0755); err != nil {
-			return "", nil, utils.WrapError(err, "创建层目录失败")
-		}
-
 		// 获取层内容
 		blob, err := destRef.NewImageSource(ctx, sys)
 		if err != nil {
@@ -134,17 +133,17 @@ func PullAndExtract(ctx context.Context, refStr string) (string, *v1.Image, erro
 		}
 		defer reader.Close()
 
-		// 解压并提取层内容
-		if err := decompressAndUntar(reader, layerDir); err != nil {
+		// 解压并提取层内容到统一文件系统目录
+		if err := decompressAndUntar(reader, fsDir); err != nil {
 			return "", nil, utils.WrapError(err, fmt.Sprintf("解压层 %d 失败", i))
 		}
 		logger.Info("层提取完成",
 			logger.WithInt("current", i+1),
 			logger.WithInt("total", len(layers)))
 	}
-	logger.Info("所有镜像层提取完成")
+	logger.Info("所有镜像层提取完成，文件系统已完整解析", logger.WithString("fs_path", fsDir))
 
-	return tmpDir, cfg, nil
+	return fsDir, ociCfg, nil
 }
 
 // decompressAndUntar 解压并提取 tar 文件内容

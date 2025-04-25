@@ -11,8 +11,3 @@ func WrapError(err error, context string) error {
 	}
 	return fmt.Errorf("%s: %w", context, err)
 }
-
-// IsError 检查错误是否为特定类型
-func IsError(err error, target error) bool {
-	return err == target
-}

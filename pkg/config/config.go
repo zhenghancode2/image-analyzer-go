@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gopkg.in/yaml.v3"
@@ -18,16 +20,17 @@ type LogConfig struct {
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	ReadTimeout    int    `json:"read_timeout"`
-	WriteTimeout   int    `json:"write_timeout"`
-	MaxRequestSize int64  `json:"max_request_size"`
+	Host           string        `json:"host"`
+	Port           int           `json:"port"`
+	ReadTimeout    time.Duration `json:"read_timeout"`
+	WriteTimeout   time.Duration `json:"write_timeout"`
+	MaxRequestSize int64         `json:"max_request_size"`
 }
 
 // AnalyzeConfig 分析配置
 type AnalyzeConfig struct {
 	TmpDir              string   `json:"tmp_dir"`
+	UnpackDir           string   `json:"unpack_dir"`
 	CheckOSInfo         bool     `json:"check_os_info"`
 	CheckPythonPackages bool     `json:"check_python_packages"`
 	CheckCommonTools    bool     `json:"check_common_tools"`
@@ -39,7 +42,7 @@ type Config struct {
 	Log     LogConfig     `json:"log"`
 	Server  ServerConfig  `json:"server"`
 	Analyze AnalyzeConfig `json:"analyze"`
-	GinMode string        `yaml:"gin_mode" json:"gin_mode" toml:"gin_mode"`
+	GinMode string        `json:"gin_mode"`
 }
 
 // DefaultConfig 返回默认配置
@@ -60,6 +63,7 @@ func DefaultConfig() *Config {
 		},
 		Analyze: AnalyzeConfig{
 			TmpDir:              "tmp",
+			UnpackDir:           "images",
 			CheckOSInfo:         true,
 			CheckPythonPackages: true,
 			CheckCommonTools:    true,
@@ -101,9 +105,24 @@ func (c *Config) GetTempDir() string {
 	return c.Analyze.TmpDir
 }
 
+// GetUnpackDir 获取解压目录路径
+func (c *Config) GetUnpackDir() string {
+	return c.Analyze.UnpackDir
+}
+
+// GetServerAddress 返回格式化的服务器地址 (host:port)
+func (c *Config) GetServerAddress() string {
+	// 校验host和port是否合法
+	if c.Server.Host == "" || c.Server.Port <= 0 {
+		// default
+		return "0.0.0.0:8080"
+	}
+	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
+}
+
 // EnsureDirs 确保所需的目录存在
 func (c *Config) EnsureDirs() error {
-	dirs := []string{c.Log.Dir, c.Analyze.TmpDir}
+	dirs := []string{c.Log.Dir, c.Analyze.TmpDir, c.Analyze.UnpackDir}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err

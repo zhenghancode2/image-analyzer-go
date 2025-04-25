@@ -1,19 +1,16 @@
 package cmd
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
-	"image-analyzer-go/pkg/analyze"
-	"image-analyzer-go/pkg/imageutil"
+	"image-analyzer-go/pkg/config"
 	"image-analyzer-go/pkg/logger"
-	"image-analyzer-go/pkg/utils"
+	"image-analyzer-go/pkg/router"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var serverCmd = &cobra.Command{
@@ -21,7 +18,9 @@ var serverCmd = &cobra.Command{
 	Short: "启动 API 服务器",
 	Long:  `启动一个 HTTP 服务器，提供镜像分析 API。`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runServer()
+		// 从命令上下获取配置
+		cfg := GetConfig(cmd.Context())
+		return runServer(cfg)
 	},
 }
 
@@ -29,93 +28,44 @@ func init() {
 	rootCmd.AddCommand(serverCmd)
 }
 
-type AnalysisRequest struct {
-	ImageRef string                  `json:"image_ref" binding:"required"`
-	Options  *analyze.AnalyzeOptions `json:"options"`
-	Format   string                  `json:"format" binding:"oneof=json yaml"`
-}
-
-func runServer() error {
-	r := gin.Default()
-
+func runServer(cfg *config.Config) error {
+	// 根据环境设置 Gin 模式
+	gin.SetMode(cfg.GinMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
 	// 设置请求大小限制
 	r.MaxMultipartMemory = cfg.Server.MaxRequestSize
-
-	// 设置超时中间件
-	r.Use(func(c *gin.Context) {
-		c.Set("timeout", cfg.Server.ReadTimeout)
-		c.Next()
-	})
-
-	r.POST("/analyze", handleAnalyze)
+	// 配置请求日志记录
+	r.Use(gin.LoggerWithConfig(gin.LoggerConfig{
+		Formatter: func(param gin.LogFormatterParams) string {
+			return fmt.Sprintf("[GIN] %s | %d | %s | %s | %s %s\n",
+				param.TimeStamp.Format(time.RFC3339),
+				param.StatusCode,
+				param.Latency,
+				param.ClientIP,
+				param.Method,
+				param.Path,
+			)
+		},
+		Output:    gin.DefaultWriter,
+		SkipPaths: []string{"/readiness"}, // 跳过健康检查路径的日志
+	}))
+	// 使用路由器设置路由
+	router.SetupRouters(r.Group("/api/v1"), cfg)
+	// 可读性检查
 	r.GET("/readiness", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	// 使用更优雅的方式获取服务地址
+	addr := cfg.GetServerAddress()
+	httpServer := &http.Server{
+		Addr:         addr,
+		Handler:      r,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	}
 	logger.Info("启动服务器", logger.WithString("addr", addr))
-	return r.Run(addr)
-}
+	return httpServer.ListenAndServe()
 
-func handleAnalyze(c *gin.Context) {
-	var req AnalysisRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if req.Options == nil {
-		req.Options = &analyze.AnalyzeOptions{
-			CheckOSInfo:         cfg.Analyze.CheckOSInfo,
-			CheckPythonPackages: cfg.Analyze.CheckPythonPackages,
-			CheckCommonTools:    cfg.Analyze.CheckCommonTools,
-			SpecificCommands:    cfg.Analyze.SpecificCommands,
-		}
-	}
-
-	ctx := context.Background()
-	layersDir, imgCfg, err := imageutil.PullAndExtract(ctx, req.ImageRef)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("提取镜像失败: %v", err)})
-		return
-	}
-	defer func() {
-		if cleanupErr := utils.CleanupTempDir(layersDir); cleanupErr != nil {
-			logger.Warn("清理临时目录失败", logger.WithString("dir", layersDir), logger.WithError(cleanupErr))
-		}
-	}()
-
-	summary := analyze.Summary{
-		Architecture: imgCfg.Architecture,
-		OS:           imgCfg.OS,
-		Env:          imgCfg.Config.Env,
-	}
-
-	if req.Options.CheckOSInfo {
-		summary.OSInfo = analyze.CheckOSInfo(layersDir)
-	}
-	if req.Options.CheckPythonPackages {
-		summary.PythonPackages = analyze.ListPythonPackages(layersDir)
-	}
-	if req.Options.CheckCommonTools {
-		summary.Tools = analyze.CheckCommonTools(layersDir)
-	}
-
-	var response []byte
-	var marshalErr error
-
-	switch req.Format {
-	case "yaml":
-		response, marshalErr = yaml.Marshal(summary)
-	default:
-		response, marshalErr = json.MarshalIndent(summary, "", "  ")
-	}
-
-	if marshalErr != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("生成报告失败: %v", marshalErr)})
-		return
-	}
-
-	c.Header("Content-Type", "application/json")
-	c.String(http.StatusOK, string(response))
 }

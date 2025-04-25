@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"image-analyzer-go/pkg/config"
 
 	"github.com/spf13/cobra"
@@ -17,8 +18,16 @@ var (
 - Python 包依赖
 - 系统工具等`,
 	}
-	cfg = config.DefaultConfig()
 )
+
+func SetContext(ctx context.Context) {
+	rootCmd.SetContext(ctx)
+}
+
+// SetConfig 在根命令上下文中设置配置
+func SetConfig(cfg *config.Config) {
+	rootCmd.SetContext(WithConfig(rootCmd.Context(), cfg))
+}
 
 func Execute() error {
 	return rootCmd.Execute()

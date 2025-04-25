@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"image-analyzer-go/pkg/analyze"
 	"image-analyzer-go/pkg/imageutil"
@@ -14,9 +15,14 @@ import (
 )
 
 var (
-	outputFile string
-	imageRef   string
-	format     string
+	outputFile          string
+	imageRef            string
+	format              string
+	checkOSInfo         bool
+	checkPythonPackages bool
+	checkCommonTools    bool
+	specificCommands    []string
+	unpackDir           string
 )
 
 var analyzeCmd = &cobra.Command{
@@ -34,24 +40,29 @@ func init() {
 	rootCmd.AddCommand(analyzeCmd)
 	analyzeCmd.Flags().StringVarP(&outputFile, "output", "o", "report.json", "输出报告的文件路径")
 	analyzeCmd.Flags().StringVarP(&format, "format", "f", "json", "输出格式 (json 或 yaml)")
-	analyzeCmd.Flags().BoolVar(&cfg.Analyze.CheckOSInfo, "check-os", true, "是否检查系统信息")
-	analyzeCmd.Flags().BoolVar(&cfg.Analyze.CheckPythonPackages, "check-python", true, "是否检查 Python 包")
-	analyzeCmd.Flags().BoolVar(&cfg.Analyze.CheckCommonTools, "check-tools", true, "是否检查常用工具")
-	analyzeCmd.Flags().StringSliceVar(&cfg.Analyze.SpecificCommands, "commands", []string{}, "要检查的特定命令列表")
+	analyzeCmd.Flags().BoolVar(&checkOSInfo, "check-os", true, "是否检查系统信息")
+	analyzeCmd.Flags().BoolVar(&checkPythonPackages, "check-python", true, "是否检查 Python 包")
+	analyzeCmd.Flags().BoolVar(&checkCommonTools, "check-tools", true, "是否检查常用工具")
+	analyzeCmd.Flags().StringSliceVar(&specificCommands, "commands", []string{}, "要检查的特定命令列表")
+	analyzeCmd.Flags().StringVarP(&unpackDir, "unpack-dir", "d", "images", "解压缩镜像的临时目录")
 }
 
 func runAnalysis() error {
 	ctx := context.Background()
 
-	layersDir, imgCfg, err := imageutil.PullAndExtract(ctx, imageRef)
+	layersDir, imgCfg, err := imageutil.PullAndExtract(ctx, imageRef, unpackDir)
 	if err != nil {
 		return utils.WrapError(err, "提取镜像失败")
 	}
-	defer func() {
-		if cleanupErr := utils.CleanupTempDir(layersDir); cleanupErr != nil {
-			logger.Warn("清理临时目录失败", logger.WithString("dir", layersDir), logger.WithError(cleanupErr))
+	// 优雅地清理临时目录
+	defer func(dir string) {
+		if dir == "" {
+			return
 		}
-	}()
+		if cleanupErr := utils.CleanupTempDir(dir); cleanupErr != nil {
+			logger.Warn("清理临时目录失败", logger.WithString("dir", dir), logger.WithError(cleanupErr))
+		}
+	}(layersDir)
 
 	summary := analyze.Summary{
 		Architecture: imgCfg.Architecture,
@@ -59,13 +70,13 @@ func runAnalysis() error {
 		Env:          imgCfg.Config.Env,
 	}
 
-	if cfg.Analyze.CheckOSInfo {
+	if checkOSInfo {
 		summary.OSInfo = analyze.CheckOSInfo(layersDir)
 	}
-	if cfg.Analyze.CheckPythonPackages {
+	if checkPythonPackages {
 		summary.PythonPackages = analyze.ListPythonPackages(layersDir)
 	}
-	if cfg.Analyze.CheckCommonTools {
+	if checkCommonTools {
 		summary.Tools = analyze.CheckCommonTools(layersDir)
 	}
 
@@ -75,8 +86,10 @@ func runAnalysis() error {
 	switch format {
 	case "yaml":
 		output, marshalErr = yaml.Marshal(summary)
-	default:
+	case "json":
 		output, marshalErr = json.MarshalIndent(summary, "", "  ")
+	default:
+		return errors.New("不支持的输出格式: " + format)
 	}
 
 	if marshalErr != nil {
@@ -84,7 +97,7 @@ func runAnalysis() error {
 	}
 
 	if err := utils.WriteFile(outputFile, output, 0644); err != nil {
-		return err
+		return utils.WrapError(err, "写入报告文件失败")
 	}
 
 	logger.Info("分析报告已保存", logger.WithString("file", outputFile))
