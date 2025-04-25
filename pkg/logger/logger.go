@@ -45,7 +45,7 @@ func Init(cfg *config.Config) error {
 	if err := os.MkdirAll(cfg.GetLogDir(), os.ModePerm); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(cfg.GetLogPath(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(cfg.GetLogPath(), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}

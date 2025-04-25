@@ -40,3 +40,6 @@ logs/
 *.log
 tmp/
 temp/ 
+
+# Business specific
+images/
