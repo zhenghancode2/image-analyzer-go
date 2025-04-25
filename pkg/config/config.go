@@ -29,7 +29,6 @@ type ServerConfig struct {
 
 // AnalyzeConfig 分析配置
 type AnalyzeConfig struct {
-	TmpDir              string   `json:"tmp_dir"`
 	UnpackDir           string   `json:"unpack_dir"`
 	CheckOSInfo         bool     `json:"check_os_info"`
 	CheckPythonPackages bool     `json:"check_python_packages"`
@@ -62,7 +61,6 @@ func DefaultConfig() *Config {
 			MaxRequestSize: 10 * 1024 * 1024, // 10MB
 		},
 		Analyze: AnalyzeConfig{
-			TmpDir:              "tmp",
 			UnpackDir:           "images",
 			CheckOSInfo:         true,
 			CheckPythonPackages: true,
@@ -100,11 +98,6 @@ func (c *Config) GetLogPath() string {
 	return filepath.Join(c.Log.Dir, c.Log.File)
 }
 
-// GetTempDir 获取临时目录路径
-func (c *Config) GetTempDir() string {
-	return c.Analyze.TmpDir
-}
-
 // GetUnpackDir 获取解压目录路径
 func (c *Config) GetUnpackDir() string {
 	return c.Analyze.UnpackDir
@@ -122,7 +115,7 @@ func (c *Config) GetServerAddress() string {
 
 // EnsureDirs 确保所需的目录存在
 func (c *Config) EnsureDirs() error {
-	dirs := []string{c.Log.Dir, c.Analyze.TmpDir, c.Analyze.UnpackDir}
+	dirs := []string{c.Log.Dir, c.Analyze.UnpackDir}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return err
